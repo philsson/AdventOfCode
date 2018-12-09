@@ -82,8 +82,6 @@ for x in range(0, num_of_marbles):
     if player > num_of_players:
         player = 1
 
-    print("play", x, "of", num_of_marbles)
-
 max_score = 0
 for player, score in players.items():
     if score > max_score:
