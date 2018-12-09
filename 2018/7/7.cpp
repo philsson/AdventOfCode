@@ -1,6 +1,8 @@
 #include <fstream> // inFile
 #include <iostream> // cout
 #include <sstream> // tokenStream
+#include <unistd.h> // sleep
+
 
 #include "7.h"
 
@@ -37,8 +39,7 @@ void Workload::addJob(JobOrder order)
         }
         else
         {
-            JobOrder job;
-            job.job = *i;
+            JobOrder job(*i);
             job.futures.push_back(order.job);
             m_jobs[*i] = job;
         }
@@ -69,11 +70,13 @@ void Workload::printAllJobs() const
         {
             cout << *futuresIt;
         }
-        cout << endl << endl;
+        cout << endl << "Load:" << job.workload << endl;
+        cout << endl;
     }
 }
 
-JobName Workload::getNext(JobName jobName) const
+// workerID defaults to 0
+JobName Workload::getNext(JobName jobName, Worker::WorkerID workerID) const
 {
     JobMap::const_iterator it = m_jobs.find(jobName);
     const JobOrder& job = it->second;
@@ -90,11 +93,13 @@ JobName Workload::getNext(JobName jobName) const
         }
     }
 
+    // Current job needs solving or is last
     if (!job.solved || job.futures.size() == 0)
     {
         return jobName;
     }
 
+    // This job is solved. Resolving futures
     JobNames candidates;
     for (JobNames::const_iterator it = job.futures.begin();
          it != job.futures.end();
@@ -103,9 +108,18 @@ JobName Workload::getNext(JobName jobName) const
         candidates.push_back(getNext(*it));
     }
     candidates.sort();
-    return candidates.front();
+    for (JobNames::iterator it = candidates.begin(); it != candidates.end(); it++)
+    {
+        JobMap::const_iterator i = m_jobs.find(*it);
+        if (!i->second.solved && i->second.workload > 0 && (i->second.worker == workerID || i->second.worker == NO_WORKER))
+        {
+            return i->first;
+        }
+    }
+    return Workload::PresNotMet;
 }
 
+// Assignment A
 void Workload::solvePuzzle()
 {
     JobName rootName = '0';
@@ -158,6 +172,127 @@ void Workload::solvePuzzle()
     cout << "Solution: " << m_solution << endl;
 }
 
+// Assignment B
+void Workload::solvePuzzleWorkers(int numOfWorkers)
+{
+    JobName rootName = '0';
+    JobName endName;
+
+    // Find root and end
+
+    JobOrder root(rootName);
+
+    for (JobMap::iterator it = m_jobs.begin(); it != m_jobs.end(); it++)
+    {
+        if (it->second.reqs.size() == 0)
+        {
+            JobName rootName = it->first;
+            cout << "root found at " << rootName << ". Appending root 0" << endl;
+            it->second.reqs.push_back(root.job);
+            root.futures.push_back(it->first);
+        }
+        if (it->second.futures.size() == 0)
+        {
+            endName = it->first;
+            cout << "end found at " << endName << endl;
+        }
+    }
+    m_jobs[root.job] = root;
+
+    JobOrder* jobPtr = &m_jobs[rootName];
+
+    list<Worker> workers;
+    for (int i = 1; i <= numOfWorkers; i++)
+    {
+        workers.push_back(Worker(i));
+    }
+
+    cout << "New root: " << rootName << ", end: " << endName << endl;
+    bool solving = true;
+    int time = -root.workload; // To be removed from the calculation
+    while (solving)
+    {
+        cout << time << "  ";
+        for (list<Worker>::iterator it = workers.begin(); it != workers.end(); it++)
+        {
+            if (!it->hasJob)
+            {
+                JobName nextJobName = getNext(rootName, it->getID());
+                if (m_jobs.find(nextJobName) != m_jobs.end())
+                {   
+                    JobMap::iterator i = m_jobs.find(nextJobName);
+                    JobOrder& nextJob = i->second;
+                    if (nextJob.worker == NO_WORKER)
+                    {   
+                        nextJob.worker = it->getID();
+                        it->setJob(nextJob.job);
+                        it->hasJob = true;
+                    }
+                }
+            }
+        }
+        
+        for (list<Worker>::iterator it = workers.begin(); it != workers.end(); it++)
+        {
+            JobName nextJobName = it->getJob();
+            JobMap::iterator i = m_jobs.find(nextJobName);
+            JobOrder& nextJob = i->second;
+            
+            if (nextJob.worker == it->getID())
+            {
+                nextJob.workload--;
+                cout << it->getID() << "(" << nextJob.workload << "|" << it->getJob() << ")  ";
+                if (nextJob.workload <= 0)
+                {
+                    nextJob.solved = true;
+                    nextJob.worker = 0;
+                    it->hasJob = false;
+
+                    if (rootName != nextJob.job)
+                    {
+                        m_solution += nextJob.job;
+                    }
+                    if (nextJobName == endName)
+                    {
+                        solving = false;
+                    }
+                }
+            }
+            else
+            {
+                 cout << it->getID() << "(.)  ";
+            }
+        }
+        cout << m_solution << endl;
+        time++;
+    }
+    cout << "Solution: " << m_solution << " in " << time << endl;
+}
+
+Worker::Worker(WorkerID id)
+: m_id(id)
+, m_workingOn(NO_JOB)
+, hasJob(false)
+{
+
+}
+
+Worker::WorkerID Worker::getID()
+{
+    return m_id;
+}
+
+void Worker::setJob(JobName name)
+{
+    m_workingOn = name;
+    hasJob = true;
+}
+
+JobName Worker::getJob()
+{
+    return m_workingOn;
+}
+
 vector<string> split(const string& s, char delimiter)
 {
     std::vector<std::string> tokens;
@@ -184,13 +319,9 @@ list<JobOrder> parse(string filename)
     while (inFile)
     {
         inFile.getline(oneline, MAXLINE);
-        //cout << oneline << endl;
-        
         vector<string> tokens = split(oneline, ' ');
-        //cout << tokens[1] << "," << tokens[7] << endl;
 
-        JobOrder order;
-        order.job = tokens[7][0];
+        JobOrder order(tokens[7][0]);
         order.reqs.push_back(tokens[1][0]);
         orders.push_back(order);
     }
@@ -200,9 +331,13 @@ list<JobOrder> parse(string filename)
 
 int main(int argc, char* argv[])
 {
-    cout << argv[1] << endl;
+    if (argc != 3)
+    {
+        cout << "Input is assignment (A or B) followed by file to parse" << endl;
+    }
 
-    string inputfile = (argc > 0) ? argv[1] : "test_input.txt";
+    string assignment = argv[1];
+    string inputfile = argv[2];
 
     cout << "Day 7" << endl;
     Workload workload;
@@ -213,7 +348,19 @@ int main(int argc, char* argv[])
         workload.addJob(*it);
     }
 
-    //workload.printAllJobs();
+    workload.printAllJobs();
 
-    workload.solvePuzzle();
+    switch (assignment[0])
+    {
+        case 'A': 
+            workload.solvePuzzle();
+            break;
+        case 'B':
+            workload.solvePuzzleWorkers(5);
+            break;
+        default:
+            cout << "Valid assignments to choose are A or B" << endl;
+    }
+    
+    return 0;
 }
