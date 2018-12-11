@@ -2,7 +2,25 @@
 # -*- coding: utf-8 -*-
 
 import numpy as np
+import multiprocessing, logging
 import time
+
+logging.basicConfig(level=logging.DEBUG)
+_L = logging.getLogger()
+
+
+class JobTimeoutException(Exception):
+    def __init__(self, jobstack=[]):
+        super(JobTimeoutException, self).__init__()
+        self.jobstack = jobstack
+
+class ABC:
+
+    def __init__(self, power, x, y, dim):
+        self.power = power
+        self.x = x
+        self.y = y
+        self.dim = dim
 
 
 class WristDevice:
@@ -50,21 +68,42 @@ class WristDevice:
                     max_power = power
                     x_max, y_max = x, y
 
-        return max_power, x_max, y_max
+        return ABC(max_power, x_max, y_max, square_size)
 
     def find_max_block_any_size(self):
         w, h = self.m.shape
 
+        num_of_threads = 10
+        pool = multiprocessing.Pool(processes=num_of_threads)  # start 4 worker processes
+
+
+        print("Working through dimensions with", num_of_threads, "threads...")
+        result_iter = pool.imap_unordered(self.find_maximized_block, range(1, w + 1))
+
+        results = []
+
+        try:
+            while True:
+                try:
+                    result = result_iter.next(timeout=99999999)
+                    #_L.info("Result received %s", result)
+                    results.append(result)
+                except JobTimeoutException as timeout_ex:
+                    _L.warning("Job timed out %s", timeout_ex)
+                    results.append(None)
+
+        except StopIteration:
+            _L.info("All jobs complete!")
+            pass
+
         x_max, y_max, dim = 0, 0, 0
         max_power = 0
 
-        print("Working through dimensions...")
-        for x in range(1, w + 1):
-            power, x_o, y_o = self.find_maximized_block(x)
-            if power > max_power:
-                max_power = power
-                x_max, y_max = x_o, y_o
-                dim = x
+        for result in results:
+            if result.power > max_power:
+                max_power = result.power
+                x_max, y_max = result.x, result.y
+                dim = result.dim
 
         return max_power, x_max, y_max, dim
 
@@ -76,11 +115,11 @@ if __name__ == '__main__':
     device = WristDevice(serial_nr)
 
     start = time.time()
-    max_power, x, y = device.find_maximized_block()
-    print("A: power", max_power, "at x", x, "y", y)
+    result = device.find_maximized_block()
+    print("A: power", result.power, "at x", result.x, "y", result.y)
     print("Finished in", time.time() - start)
 
     start = time.time()
     max_power, x, y, dim = device.find_max_block_any_size()
-    print("B: power", max_power, "at x", x, "y", y, "and power", max_power)
+    print("B: power", max_power, "at x", x, "y", y, "and power", dim)
     print("Finished in", time.time() - start)
