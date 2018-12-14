@@ -1,27 +1,14 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+from blist import *
 
 
 class Game():
 
     def __init__(self):
-        self.marbles = [0]
+        self.marbles = blist([0])
         self.index = 0
         self.progress = 1
-
-    def print_list(self, player):
-        p = ("[" + str(player) +  "]")
-        print("%-4s" % p, end='')
-
-        for num in self.marbles:
-            if num == self.marbles[self.index]:
-                f = "(" + str(num) + ")"
-            else:
-                f = " " + str(num)
-
-            print("%-4s" % f, sep='', end='')
-        print("")
-
     def step_to_pos(self, steps):
         index = (self.index + steps) % len(self.marbles)
         if index == 0:
@@ -49,42 +36,38 @@ class Game():
             return 0
 
 
-game = Game()
-game.print_list(0)
+def play_game(part):
+    print(part, ": ", end='')
+    game = Game()
 
-num_of_players = 0
-num_of_marbles = 0
-
-example_set = False
-
-if example_set:
-    # Test
-    num_of_players = 9
-    num_of_marbles = 25
-else:
-    # The assignment
     num_of_players = 427
     num_of_marbles = 70723
 
-players = {}
-for x in range(0, num_of_players + 1):
-    players[x] = 0
+    if part is 'B':
+        num_of_marbles *= 100
 
-player = 1
-for x in range(0, num_of_marbles):
+    players = {}
+    for x in range(0, num_of_players + 1):
+        players[x] = 0
 
-    players[player] += game.insert_marble()
+    player = 1
+    for x in range(0, num_of_marbles):
 
-    if example_set:
-        game.print_list(player)
+        players[player] += game.insert_marble()
 
-    player += 1
-    if player > num_of_players:
-        player = 1
+        player += 1
+        if player > num_of_players:
+            player = 1
 
-max_score = 0
-for player, score in players.items():
-    if score > max_score:
-        max_score = score
+    max_score = 0
+    for player, score in players.items():
+        if score > max_score:
+            max_score = score
 
-print(max_score)
+    print(max_score)
+
+
+# The program
+if __name__ == '__main__':
+    play_game('A')
+    play_game('B')
