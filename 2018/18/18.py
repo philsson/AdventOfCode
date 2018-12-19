@@ -107,13 +107,29 @@ def run_b():
 
     field = Field(parse('puzzle_input.txt'))
 
-    p = 0
-    #iters = 1000000000
-    iters = 100
-    for x in range(0, iters):
+    map_history = []
+
+    iters = 1000000000
+    first_duplicate_found = False
+    solved = False
+    duplicate_size = 0
+    x = 0
+    while x < iters:
         field.step()
-        if not x % (iters/100):
-            print(round(x/iters*100, 2), '%')
+        if not solved:
+            if any((field.map == y).all() for y in map_history):
+                if not first_duplicate_found:
+                    first_duplicate_found = True
+                    map_history = []
+                    map_history.append(field.map)
+                else:
+                    duplicate_size = len(map_history)
+                    iters = (iters - x) % duplicate_size
+                    x = 0
+                    solved = True
+            else:
+                map_history.append(field.map)
+        x += 1
 
     print("Lumber:", field.get_count_of('#'))
     print("Trees:", field.get_count_of('|'))
@@ -130,4 +146,5 @@ if __name__ == '__main__':
 
     # B is not performing well enough. Needs optimizing
     # Only running 100 iterations for profiling
-    cProfile.run('run_b()')
+    #cProfile.run('run_b()')
+    run_b()
