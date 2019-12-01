@@ -4,19 +4,13 @@
 import math
 
 
-def calc_fuel(mass: int) -> int:
-    fuel = math.floor(mass / 3) - 2
-    return max(fuel, 0)
-
-
-def calc_fuel_for_fuel(mass: int) -> int:
+def calc_fuel(mass: int, recurse: bool) -> int:
     fuel = 0
     while True:
-        mass = calc_fuel(mass)
-        if mass == 0:
+        mass = max(math.floor(mass / 3) - 2, 0)
+        fuel += mass
+        if mass == 0 or recurse is not True:
             return fuel
-        else:
-            fuel += mass
 
 
 if __name__ == '__main__':
@@ -25,8 +19,8 @@ if __name__ == '__main__':
 
     with open('puzzle_input.txt') as puzzle:
         for line in puzzle:
-            fuel_a += calc_fuel(int(line))
-            fuel_b += calc_fuel_for_fuel(int(line))
+            fuel_a += calc_fuel(int(line), False)
+            fuel_b += calc_fuel(int(line), True)
         print("A: The fuel needed will be {}".format(fuel_a))
         print("B: The fuel needed will be {}".format(fuel_b))
 
